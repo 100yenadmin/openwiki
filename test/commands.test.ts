@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { parseCommand } from "../src/commands.ts";
+import { getHelpText, parseCommand } from "../src/commands.ts";
 
 // parseCommand's --dry-run gate consults isDevelopmentMode(), which reads
 // NODE_ENV / OPENWIKI_DEV. Pin both to a non-development state per test and
@@ -39,6 +39,7 @@ describe("parseCommand — chat default", () => {
       command: "chat",
       shouldStart: false,
       userMessage: null,
+      noAgentInstructions: false,
       print: false,
       dryRun: false,
       modelId: null,
@@ -86,6 +87,14 @@ describe("parseCommand — init/update", () => {
 
   test("repeating the same command flag is allowed", () => {
     expect(parseCommand(["--init", "--init"]).kind).toBe("run");
+  });
+
+  test("--no-agent-instructions suppresses root instruction file updates", () => {
+    expect(parseCommand(["--init", "--no-agent-instructions"])).toMatchObject({
+      kind: "run",
+      command: "init",
+      noAgentInstructions: true,
+    });
   });
 });
 
@@ -166,6 +175,12 @@ describe("parseCommand — --modelId", () => {
 
   test("invalid model id via equals form is an error", () => {
     expect(parseCommand(["--modelId="]).kind).toBe("error");
+  });
+});
+
+describe("help text", () => {
+  test("documents --no-agent-instructions", () => {
+    expect(getHelpText()).toContain("--no-agent-instructions");
   });
 });
 

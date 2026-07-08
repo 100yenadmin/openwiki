@@ -293,6 +293,7 @@ function App({ command }: AppProps) {
       debug: isDebugMode(),
       isFollowup: activeMessageIsFollowup,
       modelId: sessionModelId,
+      noAgentInstructions: command.noAgentInstructions,
       threadId: sessionThreadId.current,
       userMessage: activeUserMessage,
       onEvent: (event) => {
@@ -3017,6 +3018,7 @@ async function runPrintCommand(
       debug: isDebugMode(),
       isFollowup: command.command === "chat",
       modelId: command.modelId,
+      noAgentInstructions: command.noAgentInstructions,
       threadId: createOpenWikiThreadId(process.cwd()),
       userMessage: command.userMessage,
       onEvent: (event) => {
