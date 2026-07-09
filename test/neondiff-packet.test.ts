@@ -127,6 +127,27 @@ describe("NeonDiff repo-wiki packet export", () => {
     expect(packet.degraded).toBe(true);
   });
 
+  test("does not mark the standard NeonDiff packet artifact as stale source", async () => {
+    const { head, repo } = await createRepoWithOpenWiki();
+    await mkdir(path.join(repo, ".neondiff"), { recursive: true });
+    await writeFile(
+      path.join(repo, ".neondiff", "repo-wiki-packet.json"),
+      "{}\n",
+      "utf8",
+    );
+
+    const packet = await buildNeonDiffRepoWikiPacket({
+      cwd: repo,
+      generatedAt,
+      repo: "owner/repo",
+    });
+
+    expect(packet.source).toMatchObject({
+      headSha: head,
+      status: "fresh",
+    });
+  });
+
   test("writes JSON only to explicit relative output paths", async () => {
     const { repo } = await createRepoWithOpenWiki();
     const outputPath = ".neondiff/repo-wiki-packet.json";

@@ -321,6 +321,10 @@ async function readDirtyNonOpenWikiPaths(cwd: string): Promise<string[]> {
     .filter(Boolean)
     .filter((changedPath) => {
       const normalized = changedPath.replace(/\\/gu, "/");
+      if (normalized === ".neondiff" || normalized.startsWith(".neondiff/")) {
+        return false;
+      }
+      if (normalized === ".neondiff/repo-wiki-packet.json") return false;
       return (
         normalized !== OPEN_WIKI_DIR &&
         !normalized.startsWith(`${OPEN_WIKI_DIR}/`)
