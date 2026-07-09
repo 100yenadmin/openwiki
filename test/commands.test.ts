@@ -98,6 +98,70 @@ describe("parseCommand — init/update", () => {
   });
 });
 
+describe("parseCommand — NeonDiff packet export", () => {
+  test("--export-neondiff-packet exports without starting an agent run", () => {
+    expect(parseCommand(["--export-neondiff-packet"])).toEqual({
+      kind: "export-neondiff-packet",
+      exitCode: 0,
+      maxBytes: null,
+      outputPath: null,
+      repo: null,
+    });
+  });
+
+  test("accepts packet export output, repo, and budget options", () => {
+    expect(
+      parseCommand([
+        "--export-neondiff-packet",
+        "--output",
+        ".neondiff/repo-wiki-packet.json",
+        "--repo=owner/repo",
+        "--max-packet-bytes",
+        "8000",
+      ]),
+    ).toEqual({
+      kind: "export-neondiff-packet",
+      exitCode: 0,
+      maxBytes: 8000,
+      outputPath: ".neondiff/repo-wiki-packet.json",
+      repo: "owner/repo",
+    });
+  });
+
+  test("rejects export mixed with agent run options", () => {
+    const result = parseCommand(["--export-neondiff-packet", "--update"]);
+
+    expect(result.kind).toBe("error");
+    if (result.kind === "error") {
+      expect(result.message).toMatch(/cannot be combined/u);
+    }
+  });
+
+  test("requires export mode for export-only options", () => {
+    const result = parseCommand([
+      "--output",
+      ".neondiff/repo-wiki-packet.json",
+    ]);
+
+    expect(result.kind).toBe("error");
+    if (result.kind === "error") {
+      expect(result.message).toMatch(/require --export-neondiff-packet/u);
+    }
+  });
+
+  test("validates packet byte budget", () => {
+    const result = parseCommand([
+      "--export-neondiff-packet",
+      "--max-packet-bytes=0",
+    ]);
+
+    expect(result.kind).toBe("error");
+    if (result.kind === "error") {
+      expect(result.message).toMatch(/positive integer/u);
+    }
+  });
+});
+
 describe("parseCommand — print", () => {
   test("--print with a message runs and prints", () => {
     expect(parseCommand(["-p", "hello"])).toMatchObject({
@@ -181,6 +245,11 @@ describe("parseCommand — --modelId", () => {
 describe("help text", () => {
   test("documents --no-agent-instructions", () => {
     expect(getHelpText()).toContain("--no-agent-instructions");
+  });
+
+  test("documents NeonDiff packet export", () => {
+    expect(getHelpText()).toContain("--export-neondiff-packet");
+    expect(getHelpText()).toContain(".neondiff/repo-wiki-packet.json");
   });
 });
 

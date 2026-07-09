@@ -20,6 +20,13 @@ export type HelpContent = {
 export type CliCommand =
   | { kind: "help"; exitCode: 0 }
   | {
+      kind: "export-neondiff-packet";
+      exitCode: 0;
+      maxBytes: number | null;
+      outputPath: string | null;
+      repo: string | null;
+    }
+  | {
       kind: "run";
       exitCode: 0;
       command: OpenWikiCommand;
@@ -42,6 +49,10 @@ export function parseCommand(argv: string[]): CliCommand {
   }
 
   let dryRun = false;
+  let exportNeonDiffPacket = false;
+  let exportMaxBytes: number | null = null;
+  let exportOutputPath: string | null = null;
+  let exportRepo: string | null = null;
   let modelId: string | null = null;
   let noAgentInstructions = false;
   let print = false;
@@ -70,6 +81,115 @@ export function parseCommand(argv: string[]): CliCommand {
 
     if (arg === "--print" || arg === "-p") {
       print = true;
+      continue;
+    }
+
+    if (arg === "--export-neondiff-packet") {
+      exportNeonDiffPacket = true;
+      continue;
+    }
+
+    if (arg === "--output") {
+      const nextArg = argv[index + 1];
+
+      if (!nextArg || nextArg.startsWith("-")) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--output requires a relative path.",
+        };
+      }
+
+      exportOutputPath = nextArg;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--output=")) {
+      const [, outputPath = ""] = arg.split("=", 2);
+
+      if (!outputPath) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--output requires a relative path.",
+        };
+      }
+
+      exportOutputPath = outputPath;
+      continue;
+    }
+
+    if (arg === "--repo") {
+      const nextArg = argv[index + 1];
+
+      if (!nextArg || nextArg.startsWith("-")) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--repo requires an owner/repo name.",
+        };
+      }
+
+      exportRepo = nextArg;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--repo=")) {
+      const [, repo = ""] = arg.split("=", 2);
+
+      if (!repo) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--repo requires an owner/repo name.",
+        };
+      }
+
+      exportRepo = repo;
+      continue;
+    }
+
+    if (arg === "--max-packet-bytes") {
+      const nextArg = argv[index + 1];
+
+      if (!nextArg || nextArg.startsWith("-")) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--max-packet-bytes requires a positive integer.",
+        };
+      }
+
+      const parsedBytes = parsePositiveInteger(nextArg);
+
+      if (parsedBytes === null) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--max-packet-bytes requires a positive integer.",
+        };
+      }
+
+      exportMaxBytes = parsedBytes;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--max-packet-bytes=")) {
+      const [, rawBytes = ""] = arg.split("=", 2);
+      const parsedBytes = parsePositiveInteger(rawBytes);
+
+      if (parsedBytes === null) {
+        return {
+          kind: "error",
+          exitCode: 1,
+          message: "--max-packet-bytes requires a positive integer.",
+        };
+      }
+
+      exportMaxBytes = parsedBytes;
       continue;
     }
 
@@ -148,6 +268,46 @@ export function parseCommand(argv: string[]): CliCommand {
 
   const userMessage =
     userMessageParts.length > 0 ? userMessageParts.join(" ") : null;
+
+  if (exportNeonDiffPacket) {
+    if (
+      command !== "chat" ||
+      dryRun ||
+      modelId !== null ||
+      noAgentInstructions ||
+      print ||
+      userMessage !== null
+    ) {
+      return {
+        kind: "error",
+        exitCode: 1,
+        message:
+          "--export-neondiff-packet cannot be combined with agent run options or messages.",
+      };
+    }
+
+    return {
+      kind: "export-neondiff-packet",
+      exitCode: 0,
+      maxBytes: exportMaxBytes,
+      outputPath: exportOutputPath,
+      repo: exportRepo,
+    };
+  }
+
+  if (
+    exportOutputPath !== null ||
+    exportRepo !== null ||
+    exportMaxBytes !== null
+  ) {
+    return {
+      kind: "error",
+      exitCode: 1,
+      message:
+        "--output, --repo, and --max-packet-bytes require --export-neondiff-packet.",
+    };
+  }
+
   const shouldStart = command !== "chat" || userMessage !== null;
 
   if (print && !shouldStart) {
@@ -186,6 +346,7 @@ export const helpContent: HelpContent = {
     "openwiki [--modelId <model>] [message]",
     "openwiki --init [message]",
     "openwiki --update [message]",
+    "openwiki --export-neondiff-packet [--output <path>]",
   ],
   commands: [
     {
@@ -214,6 +375,24 @@ export const helpContent: HelpContent = {
       label: "--modelId <id>",
       description: "Use a model ID for this run.",
     },
+    {
+      label: "--export-neondiff-packet",
+      description:
+        "Export openwiki/ Markdown as a NeonDiff repo-wiki packet without running a model.",
+    },
+    {
+      label: "--output <path>",
+      description:
+        "Write the NeonDiff packet to a relative path instead of stdout.",
+    },
+    {
+      label: "--repo <owner/repo>",
+      description: "Set the repository identity for packet export.",
+    },
+    {
+      label: "--max-packet-bytes <n>",
+      description: "Set the NeonDiff packet byte budget.",
+    },
   ],
   developmentOptions: [
     {
@@ -229,6 +408,7 @@ export const helpContent: HelpContent = {
     'openwiki -p "Summarize what OpenWiki can do"',
     "openwiki --modelId gpt-5.5",
     'openwiki --update --modelId gpt-5.5 "Please document the API routes first"',
+    "openwiki --export-neondiff-packet --output .neondiff/repo-wiki-packet.json",
   ],
   developmentExamples: ["openwiki --dry-run"],
 };
@@ -269,6 +449,12 @@ export function getHelpText(): string {
   }
 
   return helpSections.join("\n");
+}
+
+function parsePositiveInteger(value: string): number | null {
+  if (!/^[1-9][0-9]*$/u.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 function formatRows(rows: HelpRow[]): string[] {

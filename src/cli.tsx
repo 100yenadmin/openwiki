@@ -23,6 +23,7 @@ import {
 } from "./env.js";
 import { createOpenWikiThreadId, runOpenWikiAgent } from "./agent/index.js";
 import { getErrorMessage, sanitizeDiagnosticText } from "./diagnostics.js";
+import { exportNeonDiffRepoWikiPacketJson } from "./neondiff-packet.js";
 import { stripHtmlTags } from "./utils.js";
 import {
   type OpenWikiRunEvent,
@@ -223,13 +224,13 @@ function App({ command }: AppProps) {
       return;
     }
 
-    if (command.dryRun) {
-      process.exitCode = 0;
-      app.exit();
+    if (command.kind !== "run") {
       return;
     }
 
-    if (command.kind !== "run") {
+    if (command.dryRun) {
+      process.exitCode = 0;
+      app.exit();
       return;
     }
 
@@ -2975,6 +2976,8 @@ const command = await resolveStartupCommand(parsedCommand, {
 if (shouldPrintStartupError(argv, parsedCommand, command)) {
   process.stderr.write(`${command.message}\n`);
   process.exitCode = command.exitCode;
+} else if (command.kind === "export-neondiff-packet") {
+  await runNeonDiffPacketExport(command);
 } else if (command.kind === "run" && command.print && !command.dryRun) {
   await runPrintCommand(command);
 } else {
@@ -3038,6 +3041,31 @@ async function runPrintCommand(
   } catch (error) {
     process.stderr.write(`${getErrorMessage(error)}\n`);
     writePrintErrorDiagnostics(error);
+    process.exitCode = 1;
+  }
+}
+
+async function runNeonDiffPacketExport(
+  command: Extract<CliCommand, { kind: "export-neondiff-packet" }>,
+): Promise<void> {
+  try {
+    const result = await exportNeonDiffRepoWikiPacketJson({
+      maxBytes: command.maxBytes ?? undefined,
+      outputPath: command.outputPath,
+      repo: command.repo,
+    });
+
+    if (command.outputPath) {
+      process.stdout.write(
+        `Wrote NeonDiff repo-wiki packet to ${command.outputPath}\n`,
+      );
+    } else {
+      process.stdout.write(result.json);
+    }
+
+    process.exitCode = 0;
+  } catch (error) {
+    process.stderr.write(`${getErrorMessage(error)}\n`);
     process.exitCode = 1;
   }
 }
